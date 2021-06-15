@@ -17,6 +17,9 @@ bhfiles <- which(tolower(df$basename) == 'bh.sav')
 
 df <- df[bhfiles, ]
 
+df$survey <- basename(df$dir)
+df$country <- trimws(gsub('-|_|[[:digit:]]+', '', substr(df$survey, 1, sapply(df$survey, function(x){gregexpr('MICS|SPSS|LSIS|MIMS', x)[[1]][1] - 2}))))
+
 label_process <- function(x){
   lab <- attributes(x)$label
   
@@ -63,7 +66,7 @@ sd <- data.frame(surveys = c(surveys))
 for (i in 1:nrow(sd)){
   survey <- sd$surveys[i]
   sel <- fulldict[!is.na(fulldict[ , survey]) , c('codes', 'labels', survey)]
-  
+     
   # #Use this to find codes based on labels
   # u(fulldict[grepl('interview|entrevista', fulldict$labels), c('codes', 'labels')])
 
@@ -123,6 +126,15 @@ for (i in 1:nrow(sd)){
   s <- sel$codes[sel$codes %in% c('bh4f', 'impbh4f', 'cm11ef')]
   if (length(s) > 0){
     sd[i, 'birth_flag'] <- s
+  }
+
+  #####################
+  # age at survey
+  #########################
+  # age (number)
+  s <- sel$codes[sel$codes %in% c('bh6', 'bh6')]
+  if (length(s) > 0){
+    sd[i, 'age_number'] <- s[1]
   }
 
   ##########################
@@ -195,8 +207,8 @@ for (i in 1:nrow(df)){
     }
   }
 
-  table$country <- trimws(gsub('-|_|[[:digit:]]+', '', substr(basename(df$dir[i]), 1, sapply(basename(df$dir[i]), function(x){gregexpr('MICS', x)[[1]][1] - 2}))))
-  table$survey <- basename(df$dir[i])
+  table$country <- df$country[i]
+  table$survey <- df$survey[i]
 
   allmics <- bind_rows(allmics, table)
 }
@@ -214,6 +226,7 @@ geo <- geo %>%
 allmics <- merge(allmics, geo, all.x=T)
 
 a <- allmics
+allmics <- a
 
 ####################################
 # Process Other Data
@@ -223,32 +236,59 @@ a <- allmics
 allmics$survey_cmc <- as.numeric(allmics$survey_cmc)
 allmics$survey_cmc[allmics$country == 'Nepal'] <- allmics$survey_cmc[allmics$country == 'Nepal'] - 681
 
-allmics$survey_year_cmc <- 1900 + floor((as.numeric(allmics$survey_cmc) - 1)/12)
-allmics$survey_month_cmc <- allmics$survey_cmc - 12 * (allmics$survey_year_cmc - 1900)
-
 ############# Birth Date ##############
 allmics$birth_cmc <- as.numeric(allmics$birth_cmc)
 allmics$birth_cmc[allmics$country == 'Nepal'] <- allmics$birth_cmc[allmics$country == 'Nepal'] - 681
 
-allmics$birth_year_cmc <- 1900 + floor((as.numeric(allmics$birth_cmc) - 1)/12)
-allmics$birth_month_cmc <- allmics$birth_cmc - 12 * (allmics$birth_year_cmc - 1900)
-
 # Remove imputed/flagged birthdays
-allmics$birth_month_cmc[allmics$birth_flag != '1'] <- NA
-allmics$birth_year_cmc[allmics$birth_flag != '1'] <- NA
+allmics$birth_cmc[allmics$birth_flag != '1'] <- NA
 
 # Remove weird Madagascar records with a year of 2733
-allmics$birth_month_cmc[allmics$birth_year_cmc == 2733] <- NA
-allmics$birth_year_cmc[allmics$birth_year_cmc == 2733] <- NA
+allmics$birth_cmc[allmics$birth_cmc == 9999] <- NA
+
+# Filter out data with missing or flagged birth years
+allmics <- allmics[!is.na(allmics$birth_cmc), ]
 
 ############### Death Age ###################
-
 # 1 - days
 # 2 - months
 # 3 - years
 # 9 - NA
+allmics$deathage_months <- NA
+allmics$deathage_months[which(allmics$deathage_units == '2')] <- as.numeric(allmics$deathage_number[which(allmics$deathage_units == '2')])
+allmics$deathage_months[which(allmics$deathage_units == '1')] <- floor(as.numeric(allmics$deathage_number[which(allmics$deathage_units == '1')])/30)
+allmics$deathage_months[which(allmics$deathage_units == '3')] <- floor(as.numeric(allmics$deathage_number[which(allmics$deathage_units == '3')])*12)
 
+################ Collect relevant cols and make event-history structure ###################
 
+# Relevant Cols
+allmics <- allmics[ , c('survey_cmc', 'birth_cmc', 'deathage_months', 'geo_code')]
+allmics <- allmics[allmics$survey_cmc >= allmics$birth_cmc, ]
+
+mics <- list()
+for (i in 1:nrow(allmics)){
+  if (i %% 1000 == 0){
+    print(i/nrow(allmics))
+  }
+  df <- data.frame(date_cmc=allmics$birth_cmc[i]:allmics$survey_cmc[i])
+  df$age <- df$date_cmc - allmics$birth_cmc[i]
+  df$months_before_survey <- (nrow(df):1) - 1
+  if (is.na(allmics$deathage_months[i])){
+    df$death <- FALSE
+  } else{
+    df$death <- df$age >= allmics$deathage_months[i]
+    if (any(df$death)){
+      df <- df[1:min(which(df$death)), ]
+    }
+  }
+  df$geo_code <- allmics$geo_code[i]
+  df <- df[df$age < 12, ]
+  mics[[i]] <- df
+}
+
+allcomb <- bind_rows(mics)
+
+write.csv(allcomb, '~/mortalityblob/mortnew/mics.csv', row.names=F)
 write.csv(geo, '~/mortalityblob/mortnew/geo.csv', row.names=F)
 
 
