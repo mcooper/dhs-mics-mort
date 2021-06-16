@@ -121,7 +121,7 @@ for (i in 1:nrow(alldhs)){
 
 final <- bind_rows(dhs)
 
-write.csv(final, '~/mortalityblob/mortnew/dhs.csv')
+write.csv(final, '~/mortalityblob/mortnew/dhs.csv', row.names=F)
 
 system('telegram "DONEZO!"')
 
