@@ -289,7 +289,7 @@ for (i in 1:nrow(allmics)){
 allcomb <- bind_rows(mics)
 
 write.csv(allcomb, '~/mortalityblob/mortnew/mics.csv', row.names=F)
-write.csv(geo, '~/mortalityblob/mortnew/geo.csv', row.names=F)
+write.csv(geo, '~/mortalityblob/mortnew/mics-geo.csv', row.names=F)
 
 
 
