@@ -1,5 +1,6 @@
 library(tidyverse)
 library(haven)
+library(countrycode)
 
 setwd('~/mortalityblob/micsraw')
 
@@ -11,14 +12,27 @@ df <- data.frame(full=fs, stringsAsFactors=F)
 
 df$basename <- basename(df$full)
 df$dir <- dirname(df$full)
+df$surveyfile <- basename(df$dir)
+df$year <- 
+df$country <- trimws(gsub('-|_|[[:digit:]]+', '', substr(df$surveyfile, 1, sapply(df$surveyfile, function(x){gregexpr('MICS|SPSS|LSIS|MIMS', x)[[1]][1] - 2}))))
+df$country[grepl('MYANMAR', df$surveyfile)] <- 'Myanmar'
+df$country[grepl('St.Lucia', df$surveyfile)] <- 'St. Lucia'
+
+df$ISO3 <- countrycode(gsub(" \\(.*", "", df$country), 'country.name', 'iso3c')
+df$ISO3[grepl('Kosovo', df$country)] <- 'XKO'
+df$ISO3[grepl('in Lebanon', df$country)] <- 'LBN'
+
+df <- merge(df, 
+            df %>%
+              select(surveyfile, ISO3) %>%
+              unique %>%
+              group_by(ISO3) %>%
+              mutate(survey = paste0(ISO3, '-', substr(100 + row_number(), 2, 3))))
 
 #Get all household files for surveys that were for an entire nation (not subnational)
 bhfiles <- which(tolower(df$basename) == 'bh.sav') 
 
 df <- df[bhfiles, ]
-
-df$survey <- basename(df$dir)
-df$country <- trimws(gsub('-|_|[[:digit:]]+', '', substr(df$survey, 1, sapply(df$survey, function(x){gregexpr('MICS|SPSS|LSIS|MIMS', x)[[1]][1] - 2}))))
 
 label_process <- function(x){
   lab <- attributes(x)$label
@@ -217,11 +231,11 @@ for (i in 1:nrow(df)){
 # Get Geographic Variables, Make ID
 ####################################
 
-geo <- unique(allmics[ , c('country', names(allmics)[grepl('region', names(allmics))])])
-
-geo <- geo %>%
-  group_by(country) %>%
-  mutate(geo_code = paste0(country, row_number()))
+geo <- allmics %>%
+  select(survey, matches('region')) %>%
+  unique %>%
+  group_by(survey) %>%
+  mutate(geo_code = paste0(survey, '_', row_number()))
 
 allmics <- merge(allmics, geo, all.x=T)
 
@@ -290,7 +304,4 @@ allcomb <- bind_rows(mics)
 
 write.csv(allcomb, '~/mortalityblob/mortnew/mics.csv', row.names=F)
 write.csv(geo, '~/mortalityblob/mortnew/mics-geo.csv', row.names=F)
-
-
-
 
