@@ -2,6 +2,7 @@
 # https://r-spatial.org/r/2020/06/17/s2.html
 
 library(sf)
+library(lwgeom)
 library(tidyverse)
 library(countrycode)
 
@@ -9,7 +10,7 @@ setwd('~/mortalityblob/mortnew/')
 
 # DHS
 d <- read.csv('dhs-geo-manualmatch.csv') %>%
-  select(gadm_code, geo_code)
+  select(gadm_code, geo_code, lab=v101_chr)
 
 #MICS 
 m <- read.csv('mics-geo-manualmatch.csv') %>%
@@ -74,7 +75,31 @@ for (i in 1:nrow(uu)){
   new_sp[[length(new_sp) + 1]] <- s
 }
 
+flag_discontinuous <- function(x){
+  if (length(x[[1]]) == 1){
+    return('a')
+  }
+  polys <- st_cast(x, "POLYGON")
+  areas <- st_area(polys) 
+  a_prop <- as.numeric(areas/sum(areas))
+  return(max(a_prop))
+}
+
 new <- bind_rows(new_sp)
+
+new$flag <- NA
+for (i in 1:nrow(new)){
+  x <- new$geometry[i]
+  if (st_geometry_type(x) == "POLYON"){
+    new$flag[i] <- ''
+    next
+  }
+  polys <- st_cast(x, "POLYGON") 
+  areas <- st_area(polys)       
+  a_prop <- as.numeric(areas/sum(areas))
+  new$flag[i] <- max(a_prop)
+}
+
 write_sf(new, 'admin_areas', driver='ESRI Shapefile')
 
 #####################################
@@ -98,5 +123,17 @@ for (surv in unique(a$survey)){
     guides(fill=FALSE) + 
     theme_void()
   ggsave(paste0('admin_matching/cty_admin/', surv, '.png'))
+
+  pint <- st_intersection(plt) %>%
+    filter(n.overlaps > 1)
+
+  try({
+    ggplot() + 
+      geom_sf(data=pint, color=NA, fill='grey50') + 
+      geom_sf(data=cty, color='black', fill=NA) + 
+      theme_void()
+    ggsave(paste0('admin_matching/cty_admin/', surv, '-int.png'))
+  })
+
 }
 
