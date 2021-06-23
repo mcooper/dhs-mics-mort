@@ -29,7 +29,8 @@ df <- merge(df,
               group_by(ISO3) %>%
               mutate(survey = paste0(ISO3, '-', substr(100 + row_number(), 2, 3))))
 
-#Get all household files for surveys that were for an entire nation (not subnational)
+#Get all household files for surveys that had birth history
+#I checked out childrens files (ch.sav), they dont seem to have any info on deaths
 bhfiles <- which(tolower(df$basename) == 'bh.sav') 
 
 df <- df[bhfiles, ]
@@ -142,6 +143,25 @@ for (i in 1:nrow(sd)){
     sd[i, 'birth_flag'] <- s
   }
 
+  ######################
+  # birth_date
+  ############################
+  #day
+  s <- sel$codes[sel$codes %in% c('bh4d_last')]
+  if (length(s) > 0){
+    sd[i, 'birth_day_last'] <- s
+  }
+  #month
+  s <- sel$codes[sel$codes %in% c('bh4m_last', 'cm11em')]
+  if (length(s) > 0){
+    sd[i, 'birth_month_last'] <- s[1]
+  }
+  #year
+  s <- sel$codes[sel$codes %in% c('bh4y_last', 'cm11ey')]
+  if (length(s) > 0){
+    sd[i, 'birth_year_last'] <- s[1]
+  }
+
   #####################
   # age at survey
   #########################
@@ -169,6 +189,7 @@ for (i in 1:nrow(sd)){
   if (length(s) > 0){
     sd[i, 'deathage_flag'] <- s
   }
+
 
   ######################
   # hhweight
