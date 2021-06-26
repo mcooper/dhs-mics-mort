@@ -13,8 +13,17 @@ d <- read.csv('dhs-geo-manualmatch.csv') %>%
   select(gadm_code, geo_code, lab=v101_chr)
 
 #MICS 
-m <- read.csv('mics-geo-manualmatch.csv') %>%
-  select(geo_code, gadm_code)
+m <- read.csv('mics-geo-manualmatch.csv', stringsAsFactors=F) %>%
+  select(geo_code, gadm_code, matches('region.*chr'))
+
+# Estimate MICS labels
+mr <- m %>% select(matches('region.*chr'))
+mr[is.na(mr)] <- ''
+mr <- data.frame(lapply(mr, function(x) replace(x, grepl('urb|rur|camp|capit', tolower(x)), '')))
+mrl <- apply(mr, MARGIN=1, function(x) paste0(x[x != ''], collapse=' '))
+
+m <- m %>% select(-matches('region.*chr'))
+m$lab <- mrl
 
 #Combine
 a <- bind_rows(d, m)
@@ -86,21 +95,22 @@ flag_discontinuous <- function(x){
 }
 
 new <- bind_rows(new_sp)
-
-new$flag <- NA
-for (i in 1:nrow(new)){
-  x <- new$geometry[i]
-  if (st_geometry_type(x) == "POLYON"){
-    new$flag[i] <- ''
-    next
-  }
-  polys <- st_cast(x, "POLYGON") 
-  areas <- st_area(polys)       
-  a_prop <- as.numeric(areas/sum(areas))
-  new$flag[i] <- max(a_prop)
-}
-
 write_sf(new, 'admin_areas', driver='ESRI Shapefile')
+
+## CHECK: are there large discontinuous polygons?
+# new$flag <- NA
+# for (i in 1:nrow(new)){
+#   x <- new$geometry[i]
+#   if (st_geometry_type(x) == "POLYON"){
+#     new$flag[i] <- ''
+#     next
+#   }
+#   polys <- st_cast(x, "POLYGON") 
+#   areas <- st_area(polys)       
+#   a_prop <- as.numeric(areas/sum(areas))
+#   new$flag[i] <- max(a_prop)
+# }
+# write_sf(new, 'admin_areas', driver='ESRI Shapefile')
 
 #####################################
 # Make survey-specific maps for QAQC
@@ -109,31 +119,52 @@ write_sf(new, 'admin_areas', driver='ESRI Shapefile')
 a$survey <- gsub('\\_.*', '', a$geo_code)
 
 for (surv in unique(a$survey)){
+  print(surv)
   sel <- a %>%
     filter(survey == surv)
 
   plt <- new %>%
     filter(uuid %in% sel$uuid)
 
+  nrowa <- nrow(plt)
+
+  plt <- merge(plt, sel %>% group_by(uuid) %>% summarize(lab=first(lab)))
+
+  nrowb <- nrow(plt)
+
+  if (nrowa != nrowb){
+    stop()
+  }
+
+  size <- case_when(nrowa < 10 ~ 6, 
+                    nrowa < 20 ~ 4,
+                    TRUE ~ 2)
+
   cty <- read_sf('admin_matching/GADM', paste0('gadm36_', substr(sel$gadm_code[1], 1, 3), '_0'))
 
+  ### Check - Area all areas covered that should be?
+  ### Check - Do the names make sense?
   ggplot() + 
     geom_sf(data=plt, aes(fill=uuid), alpha=0.5) + 
     geom_sf(data=cty, color='black', fill=NA) + 
+    geom_sf_label(data=plt, aes(fill=uuid, label=lab), size=2) + 
     guides(fill=FALSE) + 
     theme_void()
   ggsave(paste0('admin_matching/cty_admin/', surv, '.png'))
 
-  pint <- st_intersection(plt) %>%
-    filter(n.overlaps > 1)
+  ### CHECK - Are there overlapping polygons?
+  ### (Takes maybe an hour)
+  # pint <- st_intersection(st_simplify(plt)) %>%
+  #   filter(n.overlaps > 1)
 
-  try({
-    ggplot() + 
-      geom_sf(data=pint, color=NA, fill='grey50') + 
-      geom_sf(data=cty, color='black', fill=NA) + 
-      theme_void()
-    ggsave(paste0('admin_matching/cty_admin/', surv, '-int.png'))
-  })
+  # try({
+  #   ggplot() + 
+  #     geom_sf(data=pint, color=NA, fill='grey50') + 
+  #     geom_sf(data=cty, color='black', fill=NA) + 
+  #     theme_void()
+  #   ggsave(paste0('admin_matching/cty_admin/', surv, '-int.png'))
+  # })
 
 }
 
+write.csv(unique(a[ , 'survey', drop=F]), 'admin_matching/check.csv', row.names=F)
