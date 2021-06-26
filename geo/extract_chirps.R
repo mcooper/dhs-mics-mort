@@ -16,6 +16,8 @@ int <- st_intersection(sp, r)
 
 saveRDS(int, '~/mortalityblob/mortnew/chirps_int.RDS')
 
+system('telegram "done with intersection"')
+
 no_direct <- sp[!sp$uuid %in% int$uuid, ]
 
 d <- st_nearest_feature(no_direct, r)
@@ -32,6 +34,7 @@ comb <- bind_rows(no_direct %>%
 
 write.csv(comb, '~/mortalityblob/mortnew/uuids_chirps_matching.csv', row.names=F)
 
-system('telegram "done"')
+system('telegram "done with everything"')
 
+system('sudo poweroff')
 
