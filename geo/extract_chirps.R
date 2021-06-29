@@ -1,40 +1,48 @@
+library(data.table)
 library(tidyverse)
 library(sf)
 library(raster)
 library(lubridate)
+library(rgdal)
 
 setwd('~/mortalityblob')
 
-sp <- read_sf('mortnew/admin_areas', 'admin_areas')
+sp <- readOGR('mortnew/admin_areas', 'admin_areas')
 
 r <- raster('mortnew/masks/chirps-v2.0.1981.01.01.tif') %>%
   rasterToPoints %>%
   data.frame %>%
   st_as_sf(coords=c('x', 'y'), crs=st_crs(sp))
 
-int <- st_intersection(sp, r)
+df <- data.frame()
+for (i in 1:nrow(sp)){
+  print(i/nrow(sp))
+  rst <- data.frame(rasterToPoints(rasterize(sp[i, ], r)))
+  df <- bind_rows(df, rst %>% mutate(uuid=sp$uuid[i]))
+}
 
-saveRDS(int, '~/mortalityblob/mortnew/chirps_int.RDS')
+fwrite(df, '~/mortalityblob/mortnew/chirps/admin_areas_matching.csv', row.names=F)
 
-system('telegram "done with intersection"')
-
-no_direct <- sp[!sp$uuid %in% int$uuid, ]
-
-d <- st_nearest_feature(no_direct, r)
-saveRDS(d, '~/mortalityblob/mortnew/geo_pts.RDS')
-
-no_direct[ , c('chirps_x', 'chirps_y')] <- st_coordinates(r)[d, ]
-int[ , c('chirps_x', 'chirps_y')] <- st_coordinates(int)
-
-comb <- bind_rows(no_direct %>%
-                    st_drop_geometry,
-                  int %>%
-                    st_drop_geometry %>%
-                    dplyr::select(-`X1901.01.16`))
-
-write.csv(comb, '~/mortalityblob/mortnew/uuids_chirps_matching.csv', row.names=F)
 
 system('telegram "done with everything"')
 
 system('sudo poweroff')
+
+library(raster)
+
+r <- brick('~/mortalityblob/chirps/chirps-v2.0.monthly.nc')
+m <- rasterToPoints(r)
+
+saveRDS(m, '~/mortalityblob/mortnew/chirps/rastToPts.RDS')
+system('telegram "Saved"')
+system('telegram "Poweroff"')
+system('sudo poweroff')
+
+
+
+
+system('telegram "Done"')
+
+
+
 
