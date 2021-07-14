@@ -34,15 +34,12 @@ r <- brick('~/mortalityblob/chirps/chirps-v2.0.monthly.nc')
 m <- rasterToPoints(r)
 
 saveRDS(m, '~/mortalityblob/mortnew/chirps/rastToPts.RDS')
-system('telegram "Saved"')
-system('telegram "Poweroff"')
-system('sudo poweroff')
 
+m <- readRDS('~/mortalityblob/mortnew/chirps/rastToPts.RDS')
 
+r <- brick('~/mortalityblob/chirps/chirps-v2.0.monthly.nc')
+r <- brick('~/mortalityblob/chirps/chirps-v2.0.monthly.nc')
+m <- rasterToPoints(r)
+saveRDS(m, '~/mortalityblob/mortnew/chirps/rastToPts.RDS')
 
-
-system('telegram "Done"')
-
-
-
-
+# Looks like no NAs?
