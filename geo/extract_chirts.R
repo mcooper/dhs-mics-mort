@@ -46,14 +46,35 @@ while (length(list.files(path='~/mortalityblob/mortnew/chirts')) < 816){
     mn <- substr(s, 6, 7)
     dy <- substr(s, 9, 10)
     system(paste0('wget -P ', m, ' http://data.chc.ucsb.edu/products/CHIRTSdaily/v1.0/global_tifs_p05/Tmin/', y, '/Tmin.', y, '.', mn, '.', dy, '.tif'))
-    system(paste0('wget -P ', m, ' http://data.chc.ucsb.edu/products/CHIRTSdaily/v1.0/global_tifs_p05/Tmax/', y, '/Tmax.', y, '.', mn, '.', dy, '.tif'))
+    # system(paste0('wget -P ', m, ' http://data.chc.ucsb.edu/products/CHIRTSdaily/v1.0/global_tifs_p05/Tmax/', y, '/Tmax.', y, '.', mn, '.', dy, '.tif'))
   }
 
-  gdal_mean(m, 'Tmax')
+  # gdal_mean(m, 'Tmax')
   gdal_mean(m, 'Tmin')
 
   system(paste0('rm -rf ', m))
 }
 
 system('telegram DONE')
+
+###################################
+# Convert to Tabular
+###################################
+setwd('~/mortalityblob/mortnew/chirts/')
+
+r <- stack(list.files(pattern='Tmax'))
+m <- rasterToPoints(r)
+saveRDS(m, '~/mortalityblob/mortnew/chirps/TmaxPts.RDS')
+
+system('telegram, "Converted!"')
+
+rm(r, m)
+gc()
+
+r <- stack(list.files(pattern='Tmin'))
+m <- rasterToPoints(r)
+saveRDS(m, '~/mortalityblob/mortnew/chirps/TminPts.RDS')
+
+# Maybe try something with gdaltranslate? https://gis.stackexchange.com/questions/34595/extraction-of-dem-from-netcdf-file-into-ascii-xyz-format
+
 
