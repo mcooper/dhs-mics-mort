@@ -31,15 +31,12 @@ system('sudo poweroff')
 library(raster)
 
 r <- brick('~/mortalityblob/chirps/chirps-v2.0.monthly.nc')
-m <- rasterToPoints(r)
+m <- data.table(rasterToPoints(r))
+n <- names(m)[3:ncol(m)]
+names(m)[3:ncol(m)] <- paste0(substr(n, 2, 5), '-', substr(n, 7, 8))
+m$x <- round(m$x, 3)
+m$y <- round(m$y, 3)
 
-saveRDS(m, '~/mortalityblob/mortnew/chirps/rastToPts.RDS')
-
-m <- readRDS('~/mortalityblob/mortnew/chirps/rastToPts.RDS')
-
-r <- brick('~/mortalityblob/chirps/chirps-v2.0.monthly.nc')
-r <- brick('~/mortalityblob/chirps/chirps-v2.0.monthly.nc')
-m <- rasterToPoints(r)
-saveRDS(m, '~/mortalityblob/mortnew/chirps/rastToPts.RDS')
-
-# Looks like no NAs?
+m2 <- melt(m, id.vars=c('x', 'y'))
+names(m2) <- c('x', 'y', 'date', 'precip')
+fwrite(m2, 'mortnew/chirps/chirps.xyz')
