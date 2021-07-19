@@ -1,7 +1,5 @@
 library(data.table)
 
-setDTthreads(32)
-
 setwd('~/mortalityblob/mortnew/')
 
 uuids <- fread('chirps/admin_areas_matching.csv')
@@ -49,42 +47,52 @@ rm(tmp, prp)
 
 gc()
 
+#####################################
+# Split it all up for Parallelization
+#####################################
+
+# Bash
+cd ~/mortalityblob/mortnew/
+sudo chown mattcoop /mnt 
+mkdir /mnt/split
+tail -n +2 chirxs.csv | split -l 408 - /mnt/split/
+
 ##############################
 # Calculate evapotranspiration
 ##############################
 
+setwd('/mnt/split')
+
+fs <- list.files()
+
 library(SPEI)
+library(foreach)
+library(doParallel)
 
-d <- unique(all[ , c('x', 'y')])
+cl <- makeCluster(detectCores(), outfile='')
+registerDoParallel(cl)
 
-all$spei1 <- NA
-all$spei2 <- NA
-all$spei3 <- NA
-all$spei6 <- NA
-all$spei12 <- NA
-all$spei24 <- NA
-all$spei36 <- NA
-all$spei48 <- NA
+foreach(f=fs, .packages=c('SPEI', 'data.table')) %dopar% {
+  cat(which(fs==f)/length(fs), '\n')
 
-for (i in 1:nrow(d)){
-  cat(i/nrow(d))
-
-  ix <- all$x == d$x[i] & all$y == d$y[i]
-
-  s <- all[ix,]
+  s <- fread(f, col.names=c('x', 'y', 'date', 'tmax', 'tmin', 'prp'))
   
   # water balance
   s$et0 <- hargreaves(lat = s$y[1], Tmin = s$tmin, Tmax=s$tmax, Pre = s$prp)
   s$wb <- s$prp - s$et0
 
-  all$spei1[ix] <- round(as.numeric(spei(s$wb, 1, na.rm=TRUE)$fitted), 3)
-  all$spei2[ix] <- round(as.numeric(spei(s$wb, 2, na.rm=TRUE)$fitted), 3)
-  all$spei3[ix] <- round(as.numeric(spei(s$wb, 3, na.rm=TRUE)$fitted), 3)
-  all$spei6[ix] <- round(as.numeric(spei(s$wb, 6, na.rm=TRUE)$fitted), 3)
-  all$spei12[ix] <- round(as.numeric(spei(s$wb, 12, na.rm=TRUE)$fitted), 3)
-  all$spei24[ix] <- round(as.numeric(spei(s$wb, 24, na.rm=TRUE)$fitted), 3)
-  all$spei36[ix] <- round(as.numeric(spei(s$wb, 36, na.rm=TRUE)$fitted), 3)
-  all$spei48[ix] <- round(as.numeric(spei(s$wb, 48, na.rm=TRUE)$fitted), 3)
+  s$spei01 <- round(as.numeric(spei(s$wb, 1, na.rm=TRUE)$fitted), 3)
+  s$spei02 <- round(as.numeric(spei(s$wb, 2, na.rm=TRUE)$fitted), 3)
+  s$spei03 <- round(as.numeric(spei(s$wb, 3, na.rm=TRUE)$fitted), 3)
+  s$spei06 <- round(as.numeric(spei(s$wb, 6, na.rm=TRUE)$fitted), 3)
+  s$spei12 <- round(as.numeric(spei(s$wb, 12, na.rm=TRUE)$fitted), 3)
+  s$spei24 <- round(as.numeric(spei(s$wb, 24, na.rm=TRUE)$fitted), 3)
+  s$spei36 <- round(as.numeric(spei(s$wb, 36, na.rm=TRUE)$fitted), 3)
+  s$spei48 <- round(as.numeric(spei(s$wb, 48, na.rm=TRUE)$fitted), 3)
+
+  s <- s[ , c('x', 'y', 'date', "spei01", "spei02", "spei03",
+              "spei06", "spei12", "spei24", "spei36", "spei48")]
+
+  fwrite(s, f)
 }
 
-fwrite(all, 'chirxs.csv')

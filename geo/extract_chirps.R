@@ -39,4 +39,9 @@ m$y <- round(m$y, 3)
 
 m2 <- melt(m, id.vars=c('x', 'y'))
 names(m2) <- c('x', 'y', 'date', 'precip')
+
+# aa <- fread('mortalityblob/mortnew/chirps/admin_areas_matching.csv')
+# m2 <- m2[grepl(paste0(1983:2016, collapse='|'), m2$date), ]
+# m2 <- m2[m2$x %in% aa$spei_x & m2$y %in% aa$y, ]
+
 fwrite(m2, 'mortnew/chirps/chirps.xyz')
