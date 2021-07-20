@@ -21,6 +21,27 @@ for (i in 1:nrow(sp)){
   df <- bind_rows(df, rst %>% mutate(uuid=sp$uuid[i]))
 }
 
+df <- df %>%
+  mutate(x=round(x, 3),
+         y=round(y, 3),
+         layer=NULL)
+
+ag <- raster('mortnew/masks/agland_chirps_scale.tif') %>%
+  rasterToPoints %>%
+  data.frame %>%
+  mutate(x=round(x, 3),
+         y=round(y, 3))
+pop <- raster('mortnew/masks/pop_chirps_scale.tif') %>%
+  rasterToPoints %>%
+  data.frame %>%
+  mutate(x=round(x, 3),
+         y=round(y, 3))
+
+df <- Reduce(function(x, y) merge(x, y, all.x=T, all.y=F),
+             list(df, ag, pop))
+
+names(df)[4:5] <- c('ag', 'pop')
+
 fwrite(df, '~/mortalityblob/mortnew/chirps/admin_areas_matching.csv', row.names=F)
 
 
