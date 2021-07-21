@@ -1,13 +1,13 @@
 library(gdalUtils)
 library(dplyr)
 library(SPEI)
-library(raster)
 library(lubridate)
-library(zoo)
-library(pbapply)
+library(data.table)
 library(doParallel)
+library(raster)
+library(zoo)
 
-aa <- read.csv('~/mortalityblob/mortnew/chirps/admin_areas_matching.csv')
+aa <- fread('~/mortalityblob/mortnew/chirps/admin_areas_matching.csv')
 aa[is.na(aa)] <- 0
 
 #Read in precipitation data and create a gdal VRT file
@@ -39,7 +39,10 @@ scale_t <- function(t){
 
 aa <- aa[order(aa$uuid), ]
 
-res <- foreach(uu=unique(aa$uuid), .packages=c('raster', 'gdalUtils', 'SPEI', 'dplyr', 'zoo'), .combine=bind_rows) %dopar% {
+uus <- unique(aa$uuid)
+uus <- uus[!uus %in% list.files('~/mortalityblob/mortnew/uuidtmp/')]
+
+res <- foreach(uu=unique(aa$uuid), .packages=c('raster', 'gdalUtils', 'SPEI', 'dplyr', 'zoo', 'lubridate', 'data.table'), .combine=bind_rows) %dopar% {
 
   sel <- aa %>%
     filter(uuid == uu)
@@ -52,23 +55,27 @@ res <- foreach(uu=unique(aa$uuid), .packages=c('raster', 'gdalUtils', 'SPEI', 'd
     sel$pop <- 1
   }
 
-  sel$pop <- sel$pop/sum(sel$pop)
-  sel$ag <- sel$ag/sum(sel$ag)
+  #Get sum of weights
+  popw <- sum(sel$pop)
+  agw <- sum(sel$ag)
 
   res <- data.frame(date=substr(seq(ymd("1981-01-01"), ymd("2020-12-01"), by='month'), 1, 7), wb_pop=0, wb_ag=0)
 
   cat(min(which(aa$uuid == uu))/nrow(aa), '\n')
   for (i in 1:nrow(sel)){
-    print(i/nrow(sel))
-
     #Extract time series of precipitation data
     precip <- as.numeric(gdallocationinfo(precip_vrt_file, sel$x[i], sel$y[i],
                                           wgs84=TRUE, valonly=TRUE))
 
-    temp <- scale_t(as.numeric(gdallocationinfo('NETCDF:"/home/mattcoop/mortalityblob/era5/era5-temp.nc":t2m', scale_x(sel$x[i]), scale_y(sel$y[i]), valonly=TRUE)))
+    if (any(precip == -9999)){
+      #Remove weight value from weight total
+      popw <- popw - sel$pop[i]
+      agw <- agw - sel$ag[i]
+      next
+    }
 
-    precip[precip == -9999] <- NA
-    temp[temp < -70] <- NA
+    #Extract temperature data
+    temp <- scale_t(as.numeric(gdallocationinfo('NETCDF:"/home/mattcoop/mortalityblob/era5/era5-temp.nc":t2m', scale_x(sel$x[i]), scale_y(sel$y[i]), valonly=TRUE)))
 
     wb <- as.numeric(precip - thornthwaite(temp, sel$y[i]))
 
@@ -76,32 +83,30 @@ res <- foreach(uu=unique(aa$uuid), .packages=c('raster', 'gdalUtils', 'SPEI', 'd
     res$wb_ag <- res$wb_ag + wb*sel$ag[i]
   }
 
+  res$wb_pop <- res$wb_pop/popw
+  res$wb_ag <- res$wb_ag/agw
 
+  res$spei01=round(as.numeric(spei(res$wb_pop, 1, na.rm=TRUE)$fitted), 3)
+  res$spei02=round(as.numeric(spei(res$wb_pop, 2, na.rm=TRUE)$fitted), 3)
+  res$spei03=round(as.numeric(spei(res$wb_pop, 3, na.rm=TRUE)$fitted), 3)
+  res$spei06=round(as.numeric(spei(res$wb_ag, 6, na.rm=TRUE)$fitted), 3)
+  res$spei12=round(as.numeric(spei(res$wb_ag, 12, na.rm=TRUE)$fitted), 3)
+  res$spei24=round(as.numeric(spei(res$wb_ag, 24, na.rm=TRUE)$fitted), 3)
+  res$spei36=round(as.numeric(spei(res$wb_ag, 36, na.rm=TRUE)$fitted), 3)
+  res$spei48=round(as.numeric(spei(res$wb_ag, 48, na.rm=TRUE)$fitted), 3)
 
-  #Run summary stats using the time series, like getting z-scores, percentiles, and SPI score
-  precip_zscore <- (precip - mean(precip, na.rm=T))/sd(precip, na.rm=T)
-  precip_percentile <- ecdf(precip)(precip)*100
-  precip_spi12 <- as.numeric(spi(precip, 12, na.rm=TRUE)$fitted)
-  
-  prp_df <- date.frame(date=seq(ymd("1981-01-01"), ymd("2020-01-01"), by='month'), #Make a date column
-                                                                                   #Should matches dates of tiff files
-                                                                                   #and format of DATE column of mydata.csv
-                       precip_zscore,
-                       precip_percentile,
-                       precip_spi12)
-  
-  #Subset point data to the code we are iterating on 
-  spsel <- sp[sp$tmpcode==rll$tmpcode[n], ]
-  
-  comb <- merge(spsel, prp_df, all.x=T, all.y=F) %>%
-	  dplyr::select(-tmpcode)
+  res$wb_pop <- round(res$wb_pop/popw, 3)
+  res$wb_ag <- round(res$wb_ag/agw, 3)
 
-  cat(n, round(n/nrow(rll)*100, 4), 'percent done\n') 
-  
-  comb
+  res$uuid <- uu
+
+  fwrite(res, paste0('~/mortalityblob/mortnew/uuidtmp/', uu))
+
 }
 
-write.csv(result, '~/datadir/mydata_climate_metrics.csv', row.names=F)
+system('telegram "Donezo!"')
+
+
 
 
 
