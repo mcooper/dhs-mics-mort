@@ -34,6 +34,10 @@ rm(dhs, mics)
 geom <- fread('geo_matching.csv') %>%
   select(geo_code, uuid)
 
+uuids <- fread('uuids_spei_matching.csv') %>% 
+  select(uuid, area) %>%
+  unique
+
 spei <- fread('chirps_spei_uuids.csv')
 
 spei$year <- as.numeric(substr(spei$date, 1, 4))
@@ -45,6 +49,7 @@ spei <- spei %>%
 
 all <- merge(comb, geom)
 all <- merge(all, spei, all.x=T, all.y=F, by=c('date_cmc', 'uuid'))
+all <- merge(all, uuids, all.x=T, all.y=F, by='uuid')
 
 all <- all %>%
   filter(!is.na(spei01))

@@ -23,7 +23,9 @@ for (spei in c('spei01', 'spei02', 'spei03', 'spei06', 'spei12', 'spei24', 'spei
                        piece.formula(spei, c(-1, -0.5, 0, 0.5, 1)), ' + ',
                        'date_cmc | survey + uuid')
   
-  mod <- feols(as.formula(formula), data=d)
+  mod <- feols(as.formula(formula), data=d %>% filter(age == 0, 
+                                                      months_before_survey < 12,
+                                                      area < 1e5))
   
   df[ , spei] <- df$spei_range
   
@@ -42,6 +44,6 @@ df <- df %>%
 
 ggplot(df) + 
   geom_line(aes(x=spei_range, y=value2, color=key))
-ggsave('~/dhs-mics-mort/res/chirps_spei_curves.png')
+ggsave('~/dhs-mics-mort/res/chirps_spei_curves-age0_12mo_before_survey-area_1e5.png')
 system('telegram "DONE"')
 system('sudo poweroff')
