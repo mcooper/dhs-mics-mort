@@ -106,6 +106,9 @@ res <- foreach(uu=unique(aa$uuid), .packages=c('raster', 'gdalUtils', 'SPEI', 'd
 
 system('telegram "Donezo!"')
 
+cd ~/mortalityblob/mortnew/uuidtmp/
+cat uu0001 | head -1 > ../chirps_spei_uuids.csv
+cat * | grep -a -v wb_pop >> ../chirps_spei_uuids.csv
 
 
 
